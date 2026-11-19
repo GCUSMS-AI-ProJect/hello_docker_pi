@@ -1,0 +1,6 @@
+services:
+  desktop:
+    environment:
+      WIFI_INTERFACE: ${WIFI_INTERFACE:?missing Wi-Fi interface}
+    volumes:
+      - /var/lib/helloboard-control:/run/helloboard-control:ro

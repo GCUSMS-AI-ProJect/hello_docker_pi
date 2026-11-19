@@ -1,0 +1,23 @@
+name: hello_docker_pi
+services:
+  desktop:
+    build:
+      context: .
+      args:
+        - http_proxy
+        - https_proxy
+    image: hello-docker-pi:local
+    container_name: hello_docker
+    hostname: hellodocker
+    restart: always
+    init: true
+    ports:
+      - "127.0.0.1:6080:6080"
+      - "${BOARD_BIND:-0.0.0.0}:8090:8090"
+    volumes:
+      - home:/home/hellodocker
+      - ./files:/work:ro
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+volumes:
+  home:

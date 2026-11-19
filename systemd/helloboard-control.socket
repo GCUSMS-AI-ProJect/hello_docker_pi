@@ -1,0 +1,7 @@
+[Socket]
+ListenStream=/var/lib/helloboard-control/network.sock
+SocketMode=0600
+ExecStartPost=/usr/bin/chown MAPPED_UID /var/lib/helloboard-control/network.sock
+Accept=yes
+[Install]
+WantedBy=sockets.target
