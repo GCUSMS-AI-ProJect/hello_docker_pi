@@ -43,6 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/GCUSMS-AI-ProJect/hello_docker_pi/m
 | 图形桌面 | 设备本机打开 [noVNC](http://127.0.0.1:6080/vnc.html)。从电脑访问时，先在电脑终端运行 `ssh -N -L 6080:127.0.0.1:6080 用户@设备IP`，再用电脑浏览器打开同一地址 |
 | 登录 | HelloBoard 用户名为 `hellodocker`。密码首次启动时随机生成，通过下方命令查看。noVNC 也使用此密码 |
 | 文件和绘图 | 将文件放入安装目录的 `files/`，在桌面的 `/work` 中打开图片或 PDF。运行 Matplotlib 可以打开绘图窗口 |
+| 双向共享 | 宿主机 `~/file_share` 对应容器 `/home/hellodocker/file_share`，两边都能读写 |
 | 宿主机代理 | 在 HelloBoard 的「代理」页测试并保存。已打开的 Bash 终端运行 `source ~/.bashrc` 后应用新设置 |
 
 在树莓派终端执行以下命令，连接当前用户的 Rootless Docker，然后查看密码或进入开发目录。
@@ -56,6 +57,8 @@ docker exec -it hello_docker bash
 ```
 
 noVNC 密码文件保存在容器数据卷的 `/home/hellodocker/config/` 内，权限为 `600`。升级时会自动移入已有的密码文件。备份数据卷时请妥善保管密码文件。
+
+安装或更新时会创建宿主机的 `~/file_share` 并配置共享权限。两边操作的是同一份文件，重建容器后共享文件仍保存在宿主机。
 
 ## 在树莓派桌面使用 Terminator
 

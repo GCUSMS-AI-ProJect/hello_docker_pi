@@ -22,6 +22,11 @@ services:
       - home:/home/hellodocker
       - ./files:/work:ro
       - type: bind
+        source: ${HOME}/file_share
+        target: /home/hellodocker/file_share
+        bind:
+          create_host_path: false
+      - type: bind
         source: ${HOME}/.local/share/hello_docker_pi/proxy
         target: /run/helloboard-proxy
         read_only: true

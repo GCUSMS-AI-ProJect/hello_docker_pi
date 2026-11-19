@@ -195,6 +195,14 @@ mapped=$(awk '/^Uid:/{print $2}' "/proc/$pid/status")
 [[ $mapped =~ ^[0-9]+$ && $mapped -gt 0 && $mapped -ne $UID ]] ||
     fail "容器用户映射无效。"
 
+share_dir="$HOME/file_share"
+[[ ! -L $share_dir ]] || fail "$share_dir 必须是实际目录。"
+mkdir -p -m 700 -- "$share_dir" || fail "无法创建 $share_dir。"
+[[ -O $share_dir ]] || fail "$share_dir 须由当前宿主机用户拥有。"
+setfacl -m "u:$mapped:rwx,d:u:$UID:rwx,d:u:$mapped:rwx,d:g::---,d:o::---" -- "$share_dir" ||
+    fail "无法设置 $share_dir 的共享权限，请检查文件系统是否支持 ACL。"
+say "共享文件夹 $share_dir ↔ /home/hellodocker/file_share"
+
 say "配置宿主机 Bash 代理服务"
 proxy_dir="$HOME/.local/share/hello_docker_pi"
 units_dir="$HOME/.config/systemd/user"
