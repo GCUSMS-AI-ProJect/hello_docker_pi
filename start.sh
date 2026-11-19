@@ -7,11 +7,17 @@ if [[ ! -e helloboard ]]; then
     mv -T "$stage" helloboard
 fi
 /usr/local/bin/start-desktop &
-cd helloboard
 args=(--dashboard-only)
 if [[ -n ${WIFI_INTERFACE:-} ]]; then
-    args=(--wifi-control-socket /run/helloboard-control/network.sock --interface "$WIFI_INTERFACE")
-    until [[ -s "$HOME/desktop-password" ]]; do sleep 0.2; done
+    args=(--wifi-control-socket /run/helloboard-control/network.sock --interface "$WIFI_INTERFACE"
+          --config "$HOME/helloboard/wifi.yaml")
+fi
+if [[ -n ${WIFI_INTERFACE:-} || -n ${HELLOBOARD_PROXY_SOCKET:-} ]]; then
+    for attempt in {1..50}; do
+        [[ -s "$HOME/desktop-password" ]] && break
+        sleep 0.2
+    done
+    [[ -s "$HOME/desktop-password" ]]
     /opt/board-venv/bin/python - <<'PY'
 from pathlib import Path
 from werkzeug.security import generate_password_hash
@@ -25,5 +31,5 @@ if not path.exists():
     tmp.replace(path)
 PY
 fi
-/opt/board-venv/bin/python wifi.py "${args[@]}" &
+/opt/board-venv/bin/python /opt/helloboard/wifi.py "${args[@]}" &
 wait -n

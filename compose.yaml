@@ -11,12 +11,20 @@ services:
     hostname: hellodocker
     restart: always
     init: true
+    environment:
+      HELLOBOARD_PROXY_SOCKET: /run/helloboard-proxy/bash-proxy.sock
     ports:
       - "127.0.0.1:6080:6080"
       - "${BOARD_BIND:-0.0.0.0}:8090:8090"
     volumes:
       - home:/home/hellodocker
       - ./files:/work:ro
+      - type: bind
+        source: ${HOME}/.local/share/hello_docker_pi/proxy
+        target: /run/helloboard-proxy
+        read_only: true
+        bind:
+          create_host_path: false
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
 volumes:

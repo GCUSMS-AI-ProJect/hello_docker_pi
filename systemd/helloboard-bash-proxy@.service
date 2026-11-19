@@ -1,0 +1,6 @@
+[Service]
+ExecStart=/usr/bin/python3 -I %h/.local/share/hello_docker_pi/bash_proxy.py
+StandardInput=socket
+StandardOutput=socket
+NoNewPrivileges=yes
+RuntimeMaxSec=15

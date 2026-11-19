@@ -1,0 +1,9 @@
+[Socket]
+ListenStream=%h/.local/share/hello_docker_pi/proxy/bash-proxy.sock
+SocketMode=0600
+ExecStartPost=/usr/bin/setfacl -m u:MAPPED_UID:rw %h/.local/share/hello_docker_pi/proxy/bash-proxy.sock
+Accept=yes
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

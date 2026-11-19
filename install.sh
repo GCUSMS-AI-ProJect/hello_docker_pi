@@ -8,10 +8,14 @@ say() { echo "· $*"; }
 trap 'echo "安装失败（第 $LINENO 行）。修复上方错误后可重新执行。" >&2' ERR
 [[ $# == 0 || ( $# == 1 && $1 == --check ) ]] || fail "用法：./install.sh [--check]"
 [[ $EUID != 0 ]] || fail "请以日常用户运行，脚本会按需使用 sudo。"
+[[ -r /etc/os-release ]] || fail "缺少 /etc/os-release。"
 source /etc/os-release
+for tool in git ss timeout sudo; do
+    command -v "$tool" >/dev/null || fail "请先安装 $tool。"
+done
 say "$PRETTY_NAME · $(uname -m) · 可用空间 $(df -h . | awk 'END{print $4}')"
 [[ -d /run/systemd/system ]] || fail "需要使用 systemd 的 Linux 主机。"
-case "$ID:$VERSION_CODENAME" in
+case "$ID:${VERSION_CODENAME:-}" in
   debian:trixie|raspbian:trixie) compose_pkg=docker-compose ;;
   ubuntu:noble) compose_pkg=docker-compose-v2 ;;
   *) fail "支持 Debian / Raspberry Pi OS 13 或 Ubuntu 24.04。" ;;
@@ -19,6 +23,7 @@ esac
 case "$(uname -m)" in aarch64|x86_64) ;; *) fail "需要 ARM64 或 x86_64 系统。";; esac
 systemctl --user show-environment >/dev/null || fail "请登录目标用户的本机会话或 SSH 会话。"
 interface=${WIFI_INTERFACE:-}
+requested_interface=$interface
 if [[ -z $interface ]] && command -v nmcli >/dev/null; then
     interface=$(LC_ALL=C nmcli -t -f DEVICE,TYPE,STATE device status 2>/dev/null | awk -F: '$2=="wifi" && $3=="connected"{print $1; found=1; exit} $2=="wifi" && $3=="disconnected" && !dev{dev=$1} END{if (!found) print dev}' || true)
 fi
@@ -26,13 +31,17 @@ wifi=0
 if [[ -n $interface && $interface =~ ^[a-zA-Z0-9_.-]{1,15}$ ]] && [[ $(LC_ALL=C nmcli -g WIFI-PROPERTIES.AP device show "$interface" 2>/dev/null) == yes ]]; then
     wifi=1
     say "Wi-Fi 管理网卡 $interface"
+elif [[ -n $requested_interface ]]; then
+    fail "指定网卡 $requested_interface 不支持热点，或 NetworkManager 未管理该网卡。"
 else
     say "未检测到由 NetworkManager 管理且支持热点的网卡，将启用系统看板。"
 fi
 runtime="unix://${XDG_RUNTIME_DIR:-/run/user/$UID}/docker.sock"
 export DOCKER_HOST="$runtime"
 unset DOCKER_CONTEXT
-available() { docker info --format '{{json .SecurityOptions}}' 2>/dev/null | grep -q rootless; }
+available() {
+    timeout 5 docker info --format '{{json .SecurityOptions}}' 2>/dev/null | grep -q rootless
+}
 own=false
 if available; then
     say "Rootless Docker 已就绪"
@@ -50,8 +59,12 @@ if ! $own; then
 fi
 [[ ${1:-} != --check ]] || { say "检查完成"; exit 0; }
 
+say "检查 HelloBoard 下载来源"
+timeout 15 git ls-remote --exit-code https://github.com/GCUSMS-AI-ProJect/helloboard.git refs/heads/main >/dev/null ||
+    fail "无法访问 HelloBoard 仓库，请检查网络或代理。"
+
 say "检查系统依赖"
-packages=(curl ca-certificates uidmap slirp4netns iptables "$compose_pkg" docker-buildx python3-yaml)
+packages=(acl curl ca-certificates uidmap slirp4netns iptables "$compose_pkg" docker-buildx python3-yaml)
 missing=()
 for pkg in "${packages[@]}"; do
     [[ $(dpkg-query -W -f='${db:Status-Status}' "$pkg" 2>/dev/null || true) == installed ]] || missing+=("$pkg")
@@ -71,7 +84,7 @@ if ! available; then
         rm -f "$installer"
     fi
 fi
-loginctl enable-linger "$USER" || sudo loginctl enable-linger "$USER"
+loginctl enable-linger "$(id -un)" || sudo loginctl enable-linger "$(id -un)"
 systemctl --user enable --now docker
 if [[ -n ${http_proxy:-} || -n ${https_proxy:-} ]]; then
     # Load the local proxy on restart without committing machine-specific values.
@@ -105,41 +118,61 @@ available || fail "Rootless Docker 未就绪，运行 journalctl --user -u docke
 docker compose version >/dev/null
 mkdir -p files
 say "构建桌面和 HelloBoard（首次下载较大）"
-docker compose build
+docker compose build || fail "镜像构建失败，请检查上方下载日志。"
 args=(-f compose.yaml)
+stage=$(mktemp -d)
+probe=
+cleanup() {
+    if [[ -n $probe ]]; then
+        docker rm -f "$probe" >/dev/null 2>&1 || true
+    fi
+    rm -rf -- "$stage"
+}
+trap cleanup EXIT
+probe=$(docker run -d --entrypoint sleep hello-docker-pi:local 300)
+pid=$(docker inspect -f '{{.State.Pid}}' "$probe")
+mapped=$(awk '/^Uid:/{print $2}' "/proc/$pid/status")
+[[ $mapped =~ ^[0-9]+$ && $mapped -gt 0 && $mapped -ne $UID ]] ||
+    fail "容器用户映射无效。"
+
+say "配置宿主机 Bash 代理服务"
+proxy_dir="$HOME/.local/share/hello_docker_pi"
+units_dir="$HOME/.config/systemd/user"
+install -d -m 700 "$proxy_dir" "$proxy_dir/proxy"
+mkdir -p "$units_dir"
+docker cp "$probe:/opt/helloboard/tools/bash_proxy.py" "$stage/"
+install -m 644 "$stage/bash_proxy.py" "$proxy_dir/bash_proxy.py"
+sed "s/MAPPED_UID/$mapped/" systemd/helloboard-bash-proxy.socket > "$stage/helloboard-bash-proxy.socket"
+install -m 644 "$stage/helloboard-bash-proxy.socket" systemd/helloboard-bash-proxy@.service "$units_dir/"
+systemctl --user daemon-reload
+systemctl --user enable helloboard-bash-proxy.socket
+systemctl --user restart helloboard-bash-proxy.socket
 if (( wifi )); then
     say "配置宿主机 Wi-Fi 服务"
-    stage=$(mktemp -d)
-    probe=$(docker run -d --entrypoint sleep hello-docker-pi:local 300)
-    cleanup() { docker rm -f "$probe" >/dev/null 2>&1 || true; rm -rf -- "$stage"; }
-    trap cleanup EXIT
-    pid=$(docker inspect -f '{{.State.Pid}}' "$probe")
-    mapped=$(awk '/^Uid:/{print $2}' "/proc/$pid/status")
-    [[ $mapped =~ ^[0-9]+$ && $mapped -gt 0 ]] || fail "容器用户映射无效。"
     for file in configuration.py network.py packaging/wifi-control/worker.py; do
         docker cp "$probe:/opt/helloboard/$file" "$stage/"
     done
     sed "s/WIFI_INTERFACE/$interface/" systemd/helloboard-control@.service > "$stage/helloboard-control@.service"
     sed "s/MAPPED_UID/$mapped/" systemd/helloboard-control.socket > "$stage/helloboard-control.socket"
     sudo install -d /usr/local/lib/helloboard-control /var/lib/helloboard-control
-    sudo install -m 644 "$stage/"*.py /usr/local/lib/helloboard-control/
-    sudo install -m 644 "$stage/"helloboard-control* /etc/systemd/system/
+    sudo install -m 644 "$stage/"{configuration,network,worker}.py /usr/local/lib/helloboard-control/
+    sudo install -m 644 "$stage/"helloboard-control{.socket,@.service} /etc/systemd/system/
     sudo systemctl daemon-reload
     sudo systemctl enable helloboard-control.socket
     sudo systemctl restart helloboard-control.socket
-    cleanup
-    trap - EXIT
     export WIFI_INTERFACE="$interface"
     args+=(-f compose.wifi.yaml)
 fi
+cleanup
+trap - EXIT
 docker compose "${args[@]}" up -d
 for attempt in {1..40}; do
     if docker exec hello_docker xdpyinfo >/dev/null 2>&1 && docker exec hello_docker /opt/board-venv/bin/python -c \
-        'import json,sys,urllib.request as u; s=json.load(u.urlopen("http://localhost:8090/api/status",timeout=3)); assert bool(s["capabilities"]["manage"]) == bool(int(sys.argv[1]))' "$wifi" 2>/dev/null; then
+        'import json,sys,urllib.request as u; s=json.load(u.urlopen("http://localhost:8090/api/status",timeout=3)); assert bool(s["capabilities"]["manage"]) == bool(int(sys.argv[1])); assert b"id=\"proxy-form\"" in u.urlopen("http://localhost:8090/proxy",timeout=3).read()' "$wifi" 2>/dev/null; then
         ip=$(hostname -I | awk '{print $1}')
-        say "安装完成。HelloBoard：http://${ip:-localhost}:8090"
+        say "安装完成。HelloBoard：http://${BOARD_BIND:-${ip:-localhost}}:8090"
         say "桌面：http://127.0.0.1:6080/vnc.html"
-        say "密码：docker exec hello_docker cat /home/hellodocker/desktop-password"
+        say "密码：$(command -v docker) exec hello_docker cat /home/hellodocker/desktop-password"
         exit 0
     fi
     sleep 1
