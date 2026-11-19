@@ -1,16 +1,28 @@
 #!/usr/bin/env bash
+# Parse the full installer before executing anything when streamed into Bash.
+{
 set -Eeuo pipefail
-cd "$(dirname "$0")"
+installer_path=${BASH_SOURCE[0]:-}
+if [[ -n $installer_path ]]; then
+    cd -- "$(dirname -- "$installer_path")"
+fi
 export PATH="$HOME/bin:$PATH"
 export http_proxy="${http_proxy:-${HTTP_PROXY:-}}" https_proxy="${https_proxy:-${HTTPS_PROXY:-}}"
 fail() { echo "停止：$*" >&2; exit 1; }
 say() { echo "· $*"; }
 trap 'echo "安装失败（第 $LINENO 行）。修复上方错误后可重新执行。" >&2' ERR
-[[ $# == 0 || ( $# == 1 && $1 == --check ) ]] || fail "用法：./install.sh [--check]"
+usage() {
+    echo "用法：./install.sh [--check|--help]，或 curl -fsSL 安装地址 | bash -s -- [--check]"
+}
+if [[ ${1:-} == --help && $# == 1 ]]; then
+    usage
+    exit 0
+fi
+[[ $# == 0 || ( $# == 1 && $1 == --check ) ]] || { usage >&2; exit 2; }
 [[ $EUID != 0 ]] || fail "请以日常用户运行，脚本会按需使用 sudo。"
 [[ -r /etc/os-release ]] || fail "缺少 /etc/os-release。"
 source /etc/os-release
-for tool in git ss timeout sudo; do
+for tool in ss timeout sudo; do
     command -v "$tool" >/dev/null || fail "请先安装 $tool。"
 done
 say "$PRETTY_NAME · $(uname -m) · 可用空间 $(df -h . | awk 'END{print $4}')"
@@ -59,12 +71,41 @@ if ! $own; then
 fi
 [[ ${1:-} != --check ]] || { say "检查完成"; exit 0; }
 
-say "检查 HelloBoard 下载来源"
-timeout 15 git ls-remote --exit-code https://github.com/GCUSMS-AI-ProJect/helloboard.git refs/heads/main >/dev/null ||
-    fail "无法访问 HelloBoard 仓库，请检查网络或代理。"
+if [[ -z $installer_path ]]; then
+    repo_url=https://github.com/GCUSMS-AI-ProJect/hello_docker_pi.git
+    deploy_dir="$HOME/hello_docker_pi"
+
+    if [[ -e $deploy_dir || -L $deploy_dir ]]; then
+        [[ -d $deploy_dir/.git ]] || fail "$deploy_dir 已存在，请移开该目录后重试。"
+    fi
+    if ! command -v git >/dev/null; then
+        say "安装 Git"
+        sudo apt-get update
+        sudo apt-get install -y git
+    fi
+
+    if [[ -d $deploy_dir/.git ]]; then
+        [[ $(git -C "$deploy_dir" remote get-url origin) == "$repo_url" ]] ||
+            fail "$deploy_dir 指向其他仓库。"
+        [[ $(git -C "$deploy_dir" branch --show-current) == main ]] ||
+            fail "请先切换 $deploy_dir 到 main 分支。"
+        [[ -z $(git -C "$deploy_dir" status --porcelain --untracked-files=no) ]] ||
+            fail "$deploy_dir 有未提交的更改，请先提交或保存。"
+        say "更新安装文件"
+        git -C "$deploy_dir" pull --ff-only origin main
+    else
+        say "下载安装文件"
+        download_dir=$(mktemp -d "$HOME/.hello_docker_pi.XXXXXX")
+        trap 'rm -rf -- "$download_dir"' EXIT
+        git clone --depth 1 --branch main "$repo_url" "$download_dir"
+        mv -T -- "$download_dir" "$deploy_dir"
+        trap - EXIT
+    fi
+    exec bash "$deploy_dir/install.sh"
+fi
 
 say "检查系统依赖"
-packages=(acl curl ca-certificates uidmap slirp4netns iptables "$compose_pkg" docker-buildx python3-yaml)
+packages=(acl curl ca-certificates git uidmap slirp4netns iptables "$compose_pkg" docker-buildx python3-yaml)
 missing=()
 for pkg in "${packages[@]}"; do
     [[ $(dpkg-query -W -f='${db:Status-Status}' "$pkg" 2>/dev/null || true) == installed ]] || missing+=("$pkg")
@@ -73,6 +114,10 @@ if (( ${#missing[@]} )); then
     sudo apt-get update
     sudo apt-get install -y --no-install-recommends "${missing[@]}"
 fi
+say "检查 HelloBoard 下载来源"
+timeout 15 git ls-remote --exit-code https://github.com/GCUSMS-AI-ProJect/helloboard.git refs/heads/main >/dev/null ||
+    fail "无法访问 HelloBoard 仓库，请检查网络或代理。"
+
 if ! available; then
     sudo modprobe nf_tables
     if command -v dockerd-rootless-setuptool.sh >/dev/null; then
@@ -179,3 +224,4 @@ for attempt in {1..40}; do
 done
 docker logs --tail 20 hello_docker
 fail "服务未就绪，请检查上述日志。"
+}

@@ -4,15 +4,21 @@
 
 ## 安装
 
-在目标设备用普通用户登录，准备好 Git、网络和 sudo 权限，然后运行：
+在目标设备用有 `sudo` 权限的普通用户登录，复制执行一行命令。
 
 ```bash
-git clone https://github.com/GCUSMS-AI-ProJect/hello_docker_pi.git
-cd hello_docker_pi
-./install.sh
+curl -fsSL https://raw.githubusercontent.com/GCUSMS-AI-ProJect/hello_docker_pi/main/install.sh | bash
 ```
 
-脚本先检查系统、架构、端口和无线网卡，再安装 Rootless Docker 所需的依赖。构建时从 GitHub 下载 Dockerfile 中固定版本的 HelloBoard，安装 Python 依赖，并配置宿主机代理服务。首次构建会下载图形桌面。仅检查可运行 `./install.sh --check`。已在 Raspberry Pi 5、Debian 13 ARM64 验证镜像；脚本也提供 Ubuntu 24.04 和 x86_64 的安装路径。
+脚本会检查系统、架构、端口和无线网卡，首次运行会安装缺失的 Git 并下载到 `~/hello_docker_pi`。随后安装 Rootless Docker 所需依赖，构建带 HelloBoard 的镜像，配置开机自启。重复运行同一条命令可以拉取更新并重新部署。
+
+只检查环境时运行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/GCUSMS-AI-ProJect/hello_docker_pi/main/install.sh | bash -s -- --check
+```
+
+已有仓库副本也可以在目录内运行 `./install.sh` 或 `./install.sh --check`。已在 Raspberry Pi 5、Debian 13 ARM64 验证镜像。脚本也提供 Ubuntu 24.04 和 x86_64 的安装路径。
 
 ## 使用
 
