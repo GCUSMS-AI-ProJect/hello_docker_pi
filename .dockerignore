@@ -2,3 +2,4 @@
 !Dockerfile
 !desktop.sh
 !start.sh
+!container-proxy.py

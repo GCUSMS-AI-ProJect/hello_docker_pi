@@ -1,0 +1,11 @@
+services:
+  desktop:
+    security_opt: !reset []
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - FSETID
+      - SYS_CHROOT

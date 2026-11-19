@@ -34,6 +34,19 @@ case "$ID:${VERSION_CODENAME:-}" in
 esac
 case "$(uname -m)" in aarch64|x86_64) ;; *) fail "需要 ARM64 或 x86_64 系统。";; esac
 systemctl --user show-environment >/dev/null || fail "请登录目标用户的本机会话或 SSH 会话。"
+export CONTAINER_SUDO="${CONTAINER_SUDO:-0}" GPIO_DEVICE="${GPIO_DEVICE:-}"
+case "$CONTAINER_SUDO" in
+  0) ;;
+  1) say "启用容器内 sudo" ;;
+  *) fail "CONTAINER_SUDO 只能设为 0 或 1。" ;;
+esac
+if [[ -n $GPIO_DEVICE ]]; then
+    [[ $GPIO_DEVICE =~ ^/dev/gpiochip[0-9]+$ && -c $GPIO_DEVICE ]] ||
+        fail "GPIO_DEVICE 必须指向宿主机存在的 /dev/gpiochipN。"
+    [[ -r $GPIO_DEVICE && -w $GPIO_DEVICE ]] ||
+        fail "当前宿主机用户需要 $GPIO_DEVICE 的读写权限。"
+    say "映射 GPIO 设备 $GPIO_DEVICE"
+fi
 interface=${WIFI_INTERFACE:-}
 requested_interface=$interface
 if [[ -z $interface ]] && command -v nmcli >/dev/null; then
@@ -165,6 +178,8 @@ mkdir -p files
 say "构建桌面和 HelloBoard（首次下载较大）"
 docker compose build || fail "镜像构建失败，请检查上方下载日志。"
 args=(-f compose.yaml)
+[[ $CONTAINER_SUDO == 0 ]] || args+=(-f compose.sudo.yaml)
+[[ -z $GPIO_DEVICE ]] || args+=(-f compose.gpio.yaml)
 stage=$(mktemp -d)
 probe=
 cleanup() {

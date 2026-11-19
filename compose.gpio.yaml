@@ -1,0 +1,5 @@
+services:
+  desktop:
+    devices:
+      - "${GPIO_DEVICE:?missing GPIO device}:/dev/gpiochip0:rw"
+      - "${GPIO_DEVICE:?missing GPIO device}:/dev/gpiochip4:rw"

@@ -15,6 +15,12 @@ RUN git init /opt/helloboard && cd /opt/helloboard \
     && python3 -m venv /opt/board-venv \
     && /opt/board-venv/bin/pip install --no-cache-dir -r requirements.txt
 RUN test -s /opt/helloboard/tools/bash_proxy.py
+RUN apt-get update && apt-get install -y --no-install-recommends curl gpiod sudo \
+    && printf '%s\n' 'hellodocker ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/hellodocker \
+    && chmod 0440 /etc/sudoers.d/hellodocker \
+    && visudo -cf /etc/sudoers \
+    && rm -rf /var/lib/apt/lists/*
 COPY --chmod=755 start.sh /usr/local/bin/start-hello
+COPY --chmod=755 container-proxy.py /usr/local/bin/hello-container-proxy
 USER hellodocker
 CMD ["/usr/local/bin/start-hello"]

@@ -76,6 +76,38 @@ printf '%s\n' "$HOME/.local/bin/hello-docker-shell"
 
 ## 按需配置
 
+### 容器终端代理
+
+在宿主机终端执行，先把示例地址和端口换成自己的 HTTP 代理。命令通过代理访问 `ipinfo.io`，成功后把配置保存到容器的 `~/.proxy.sh`。
+
+```bash
+docker exec hello_docker hello-container-proxy 192.0.2.10 7891
+docker exec -it hello_docker bash
+curl -fsS -o /dev/null -w 'HTTP %{http_code}\n' https://ipinfo.io
+```
+
+新开容器终端会自动检测并加载代理，检测失败时清除代理变量。已打开的容器终端运行 `source ~/.bashrc`。容器和 HelloBoard 的宿主机代理页各保存自己的配置。
+
+在宿主机终端运行同一条配置命令并加上 `--off`，关闭容器代理。
+
+```bash
+docker exec hello_docker hello-container-proxy 192.0.2.10 7891 --off
+```
+
+### 树莓派 5 GPIO 和容器内 sudo
+
+先在宿主机运行 `gpiodetect`，找到标记为 `pinctrl-rp1` 的芯片。若缺少命令，运行 `sudo apt-get install -y gpiod`。以下示例将宿主机的 `gpiochip0` 映射到容器。请按实际检测结果修改设备路径。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/GCUSMS-AI-ProJect/hello_docker_pi/main/install.sh |
+  GPIO_DEVICE=/dev/gpiochip0 CONTAINER_SUDO=1 bash
+docker exec hello_docker sudo -n gpiodetect gpiochip0
+```
+
+`CONTAINER_SUDO=1` 允许容器用户免密码执行容器内的 `sudo`。只需 GPIO 时可以省略该选项，并从宿主机运行 `docker exec --user 0 hello_docker gpiodetect gpiochip0`。更新时继续传入需要保留的选项。
+
+### 网络和摄像头
+
 - **只在本机访问 HelloBoard**。把一键安装命令末尾的 `bash` 换成 `BOARD_BIND=127.0.0.1 bash`。
 - **指定 Wi-Fi 网卡**。把一键安装命令末尾的 `bash` 换成 `WIFI_INTERFACE=wlan1 bash`，并按实际网卡名修改。完整 Wi-Fi 管理需要 NetworkManager 和支持 AP 模式的网卡。首次部署沿用当前连接，手动切换热点会断开该网卡上的 SSH。
 - **查看摄像头**。在安装目录运行 `./camera-preview.sh csi` 或 `./camera-preview.sh /dev/video0`。宿主机分别需要 `rpicam-vid` 或 `ffmpeg`。
