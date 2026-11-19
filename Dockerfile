@@ -4,12 +4,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xfce4 xfce4-terminal dbus-x11 x11-utils xauth fonts-noto-cjk \
     python3-venv git build-essential nano ca-certificates ristretto evince python3-matplotlib python3-tk ffmpeg \
     && rm -rf /var/lib/apt/lists/*
-RUN useradd --shell /bin/bash --create-home --uid 1000 hellodocker
+RUN useradd --shell /bin/bash --create-home --uid 1000 hellodocker \
+    && printf '\n# Default permissions for interactive Bash sessions.\numask 022\n' >> /etc/bash.bashrc
 COPY --chmod=755 desktop.sh /usr/local/bin/start-desktop
 WORKDIR /home/hellodocker
 ENV DISPLAY=:1 MPLBACKEND=TkAgg
 ARG BOARD_REV=9bbfe7a769ef66fb3d8a21b2541b3368065c958c
-RUN git init /opt/helloboard && cd /opt/helloboard \
+RUN umask 022 && git init /opt/helloboard && cd /opt/helloboard \
     && git remote add origin https://github.com/GCUSMS-AI-ProJect/helloboard.git \
     && git fetch --depth 1 origin "$BOARD_REV" && git checkout -b main FETCH_HEAD \
     && python3 -m venv /opt/board-venv \

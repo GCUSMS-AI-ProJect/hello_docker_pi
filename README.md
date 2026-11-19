@@ -29,6 +29,12 @@ curl -fsSL https://raw.githubusercontent.com/GCUSMS-AI-ProJect/hello_docker_pi/m
 
 已有其他路径的仓库副本时，可在该目录运行 `git pull --ff-only && ./install.sh`。首次构建需要访问 GitHub、Docker Hub、系统软件源和 PyPI。Docker Hub 超时时，在当前终端加载能访问 Docker Hub 的代理后重试。[安装脚本](install.sh) · [HelloBoard 源码](https://github.com/GCUSMS-AI-ProJect/helloboard)
 
+### 镜像构建与权限
+
+- `docker compose build` 基于 Debian 13 slim 安装 XFCE、noVNC 和开发工具。Dockerfile 将指定的 HelloBoard 提交放到 `/opt/helloboard`，Python 依赖装到 `/opt/board-venv`。 [Dockerfile](Dockerfile)
+- 容器以 `hellodocker`（UID 1000）运行。首次启动把项目复制到数据卷的 `~/helloboard`。普通目录为 `755`，Bash 使用 `umask 022`，普通新文件默认是 `644`。 [启动脚本](start.sh)
+- 更新前备份 `/home/hellodocker` 数据卷。已有项目及其权限由数据卷保留，升级后仍显示绿色背景时，检查项目所有者和目录权限。保留脚本原有执行位，避免使用 `chmod -R 777`。代理地址、密码和 Token 在部署后配置。 [Docker 数据卷说明](https://docs.docker.com/engine/storage/volumes/)
+
 ## 3. 访问和使用
 
 | 功能 | 入口 |

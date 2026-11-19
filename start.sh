@@ -1,9 +1,11 @@
 #!/bin/bash
 set -eu
+umask 022
 cd "$HOME"
 if [[ ! -e helloboard ]]; then
     stage=$(mktemp -d "$HOME/.board.XXXXXX")
     cp -R /opt/helloboard/. "$stage/"
+    chmod 755 "$stage"
     mv -T "$stage" helloboard
 fi
 /usr/local/bin/start-desktop &
