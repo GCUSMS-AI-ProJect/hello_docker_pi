@@ -2,10 +2,17 @@
 set -eu
 umask 077
 export XDG_RUNTIME_DIR=$(mktemp -d)
-if [ ! -s "$HOME/desktop-password" ]; then
-    head -c 6 /dev/urandom | base64 > "$HOME/desktop-password"
+config_dir="$HOME/config"
+password_file="$config_dir/desktop-password"
+install -d -m 700 "$config_dir"
+if [ ! -e "$password_file" ] && [ -s "$HOME/desktop-password" ]; then
+    mv -- "$HOME/desktop-password" "$password_file"
 fi
-tigervncpasswd -f < "$HOME/desktop-password" > "$XDG_RUNTIME_DIR/vncpass"
+if [ ! -s "$password_file" ]; then
+    head -c 6 /dev/urandom | base64 > "$password_file"
+fi
+chmod 600 "$password_file"
+tigervncpasswd -f < "$password_file" > "$XDG_RUNTIME_DIR/vncpass"
 export XAUTHORITY="$HOME/.Xauthority"
 touch "$XAUTHORITY"
 xauth add "$DISPLAY" . "$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"

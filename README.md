@@ -45,9 +45,34 @@ curl -fsSL https://raw.githubusercontent.com/GCUSMS-AI-ProJect/hello_docker_pi/m
 export PATH="$HOME/bin:$PATH"
 export DOCKER_HOST="unix://${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/docker.sock"
 unset DOCKER_CONTEXT
-docker exec hello_docker cat /home/hellodocker/desktop-password
+docker exec hello_docker cat /home/hellodocker/config/desktop-password
 docker exec -it hello_docker bash
 ```
+
+noVNC 密码文件保存在容器数据卷的 `/home/hellodocker/config/` 内，权限为 `600`。升级时会自动移入已有的密码文件。备份数据卷时请妥善保管密码文件。
+
+## 在树莓派桌面使用 Terminator
+
+在宿主机安装 Terminator，再创建用于进入容器的启动脚本。
+
+```bash
+sudo apt-get install -y terminator
+mkdir -p "$HOME/.local/bin"
+cat > "$HOME/.local/bin/hello-docker-shell" <<'SH'
+#!/bin/bash
+export PATH="$HOME/bin:$PATH"
+export DOCKER_HOST="unix://${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/docker.sock"
+unset DOCKER_CONTEXT
+docker exec -it -w /home/hellodocker hello_docker /bin/bash -i
+exec /bin/bash -i
+SH
+chmod 755 "$HOME/.local/bin/hello-docker-shell"
+printf '%s\n' "$HOME/.local/bin/hello-docker-shell"
+```
+
+在 Terminator 的「首选项 → 配置文件 → 命令」启用自定义命令，粘贴上面打印的路径。此后启动会进入容器并自动加载容器的 `~/.bashrc`，输入 `exit` 返回宿主机 Bash。[Terminator 配置手册](https://manpages.debian.org/trixie/terminator/terminator_config.5.en.html#Command)
+
+使用 Raspberry Pi OS 的 `wf-panel-pi` 顶部面板时，在面板的启动器设置中添加 Terminator。手动配置时，可在 `~/.config/wf-panel-pi/wf-panel-pi.ini` 的 `launchers=` 列表末尾追加 `terminator`。用户配置为空时，从 `/etc/xdg/wf-panel-pi/wf-panel-pi.ini` 复制默认配置后再修改。
 
 ## 按需配置
 

@@ -217,7 +217,7 @@ for attempt in {1..40}; do
         ip=$(hostname -I | awk '{print $1}')
         say "安装完成。HelloBoard：http://${BOARD_BIND:-${ip:-localhost}}:8090"
         say "桌面：http://127.0.0.1:6080/vnc.html"
-        say "密码：$(command -v docker) exec hello_docker cat /home/hellodocker/desktop-password"
+        say "密码：$(command -v docker) exec hello_docker cat /home/hellodocker/config/desktop-password"
         exit 0
     fi
     sleep 1

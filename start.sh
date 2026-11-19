@@ -14,10 +14,10 @@ if [[ -n ${WIFI_INTERFACE:-} ]]; then
 fi
 if [[ -n ${WIFI_INTERFACE:-} || -n ${HELLOBOARD_PROXY_SOCKET:-} ]]; then
     for attempt in {1..50}; do
-        [[ -s "$HOME/desktop-password" ]] && break
+        [[ -s "$HOME/config/desktop-password" ]] && break
         sleep 0.2
     done
-    [[ -s "$HOME/desktop-password" ]]
+    [[ -s "$HOME/config/desktop-password" ]]
     /opt/board-venv/bin/python - <<'PY'
 from pathlib import Path
 from werkzeug.security import generate_password_hash
@@ -27,7 +27,7 @@ home = Path.home()
 path = home / ".helloboard-password-hash"
 if not path.exists():
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(generate_password_hash((home / "desktop-password").read_text().strip()))
+    tmp.write_text(generate_password_hash((home / "config" / "desktop-password").read_text().strip()))
     tmp.replace(path)
 PY
 fi
